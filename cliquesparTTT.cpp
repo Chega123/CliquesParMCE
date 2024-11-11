@@ -10,13 +10,11 @@
 #include <tbb/parallel_for_each.h>
 #include <dirent.h>
 
-
-// Type definitions for ease
 using Graph = std::unordered_map<int, std::unordered_set<int>>;
 using Set = std::unordered_set<int>;
 using namespace std;
 
-// Hash function for unordered_set of integers
+// hash function para los ints en set
 struct SetHash {
     size_t operator()(const Set &s) const {
         size_t hash = 0;
@@ -27,7 +25,6 @@ struct SetHash {
     }
 };
 
-// Function to load graph from .txt file
 Graph loadGraph(const std::string &filename, int &numNodes, int &numEdges) {
     Graph G;
     std::ifstream infile(filename);
@@ -44,39 +41,38 @@ Graph loadGraph(const std::string &filename, int &numNodes, int &numEdges) {
     return G;
 }
 
-// Función para seleccionar el pivote con el mayor número de vecinos en `cand`
+// para seleccionar el pivote con el mayor numero de vecinos en cand
 int ParPivot(const Graph &G, const Set &cand, const Set &fini) {
-    // Unir cand y fini
+    // unir cand y fini
     Set candFini = cand;
     candFini.insert(fini.begin(), fini.end());
 
-    // Vector concurrente para almacenar los pares (vértice, tamaño de intersección)
+    // para almacenar los pares (vértice, tamaño de intersección)
     tbb::concurrent_vector<std::pair<int, int>> intersectionSizes;
 
-    // Calculamos en paralelo el tamaño de la intersección para cada vértice
+    // calculamos en paralelo el tamaño de la interseccion para cada vertice
     tbb::parallel_for_each(candFini.begin(), candFini.end(), [&](int w) {
         int tw = 0;
-        // Calcular la intersección entre `cand` y los vecinos de `w`
+        // calcular la interseccion entre cand y los vecinos de w
         for (int neighbor : G.at(w)) {
             if (cand.find(neighbor) != cand.end()) {
                 tw++;
             }
         }
-        // Guardar el vértice y el tamaño de la intersección
+        // guardar vertice y tamaño de la interseccion
         intersectionSizes.push_back({w, tw});
     });
 
-    // Encontrar el vértice con el máximo tamaño de intersección
+    // busca vertice con el maximo tamaño de interseccion
     auto maxElement = std::max_element(intersectionSizes.begin(), intersectionSizes.end(),
         [](const std::pair<int, int> &a, const std::pair<int, int> &b) {
             return a.second < b.second;
         });
 
-    // Retornar el vértice con la máxima intersección
+    // retorna vertice con maxima interseccion
     return maxElement->first;
 }
 
-// Función optimizada ParTTT para contar solo cliques maximales sin duplicados
 void ParTTT(const Graph &G, Set K, Set cand, Set fini, tbb::concurrent_unordered_set<Set, SetHash> &maximalCliques) {
     if (cand.empty() && fini.empty()) {
         std::vector<int> sortedK(K.begin(), K.end());
@@ -122,8 +118,8 @@ void ParTTT(const Graph &G, Set K, Set cand, Set fini, tbb::concurrent_unordered
 
 int main() {
     std::string dataset_folder = "/home/chega/cliquesparalela/dataset";
-    std::vector<int> thread_counts = {2, 4, 8, 16}; // Thread counts to use
-    // Abrir el directorio usando dirent.h
+    std::vector<int> thread_counts = {2, 4, 8, 16}; // THREADS TO USE
+
     DIR *dir = opendir(dataset_folder.c_str());
     if (dir == nullptr) {
         std::cerr << "Error opening directory" << std::endl;
@@ -132,13 +128,14 @@ int main() {
 
     struct dirent *entry;
     while ((entry = readdir(dir)) != nullptr) {
-        // Ignorar directorios "." y ".."
+        
         if (entry->d_type == DT_DIR) continue;
 
-        // Crear la ruta completa al archivo
+        // para la ruta del archivo
         std::string dataset = dataset_folder + "/" + entry->d_name;
         std::cout << "Processing dataset: " << dataset << std::endl;
 
+        
         int numNodes = 0, numEdges = 0;
         Graph G = loadGraph(dataset, numNodes, numEdges);
         std::cout << "Number of nodes: " << numNodes << ", Number of edges: " << numEdges << std::endl;
@@ -152,6 +149,7 @@ int main() {
             tbb::global_control control(tbb::global_control::max_allowed_parallelism, num_threads);
             tbb::concurrent_unordered_set<Set, SetHash> maximalCliques;
 
+            ////////////////////////////////////////////
             tbb::tick_count start = tbb::tick_count::now();
             ParTTT(G, K, cand, fini, maximalCliques);
             tbb::tick_count end = tbb::tick_count::now();
@@ -162,6 +160,6 @@ int main() {
         }
     }
 
-    closedir(dir);  // Cerrar el directorio después de recorrerlo
+    closedir(dir);
     return 0;
 }
