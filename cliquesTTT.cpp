@@ -26,7 +26,7 @@ Graph loadGraph(const string &filename, int &numNodes, int &numEdges) {
     return G;
 }
 
-// Función para seleccionar el pivote con el mayor número de vecinos en `cand ∪ fini`
+// Función para seleccionar el pivote con el mayor número de vecinos en cand ∪ fini
 int Pivot(const Graph &G, const Set &cand, const Set &fini) {
     int pivot = -1;
     int maxDegree = -1;
@@ -50,23 +50,23 @@ int Pivot(const Graph &G, const Set &cand, const Set &fini) {
 
 void TTT(const Graph &G, Set K, Set cand, Set fini, vector<Set> &maximalCliques) {
     if (cand.empty() && fini.empty()) {
-        maximalCliques.push_back(K);  // Agregar K a la lista de cliques maximales
+        maximalCliques.push_back(K);  // agrega k a la lista de cliques maximales
         return;
     }
-    int pivot = Pivot(G, cand, fini);    // Selección del pivote
-    Set ext;    // Creación del conjunto ext 
+    int pivot = Pivot(G, cand, fini);    // seleccion del pivote
+    Set ext;    // creacion del conjunto ext 
     for (int v : cand) {
         if (G.at(pivot).find(v) == G.at(pivot).end()) {
             ext.insert(v);
         }
     }
 
-    // Procesar cada vértice ext
+    // procesamos cada vértice ext
     for (int q : ext) {
         Set Kq = K;
         Kq.insert(q);
 
-        // Construir candq y finiq
+        // construir candq y finiq
         Set candq, finiq;
         for (int neighbor : G.at(q)) {
             if (cand.find(neighbor) != cand.end()) {
@@ -76,7 +76,7 @@ void TTT(const Graph &G, Set K, Set cand, Set fini, vector<Set> &maximalCliques)
                 finiq.insert(neighbor);
             }
         }
-        // Actualizar `cand` y `fini` para eliminar `q`
+        // actualizar cand y fini para eliminar q
         cand.erase(q);
         fini.insert(q);
         TTT(G, Kq, candq, finiq, maximalCliques);
