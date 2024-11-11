@@ -26,7 +26,7 @@ Graph loadGraph(const string &filename, int &numNodes, int &numEdges) {
     return G;
 }
 
-// Función para seleccionar el pivote con el mayor número de vecinos en cand ∪ fini
+// para seleccionar el pivote con el mayor número de vecinos en cand ∪ fini
 int Pivot(const Graph &G, const Set &cand, const Set &fini) {
     int pivot = -1;
     int maxDegree = -1;
