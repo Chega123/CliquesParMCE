@@ -6,27 +6,31 @@
 #include <algorithm>
 
 
-using Graph = unordered_map<int, unordered_set<int>>;
-using Set = unordered_set<int>;
+// Type definitions for ease
+using Graph = std::unordered_map<int, std::unordered_set<int>>;
+using Set = std::unordered_set<int>;
 using namespace std;
-
-Graph loadGraph(const string &filename, int &numNodes, int &numEdges) {
+// Function to load graph from .txt file
+Graph loadGraph(const std::string &filename, int &numNodes, int &numEdges) {
     Graph G;
-    ifstream infile(filename);
+    std::ifstream infile(filename);
     int u, v;
 
+    // Read each edge and add both directions (for undirected graph)
     while (infile >> u >> v) {
-        if (G[u].insert(v).second) {  
-            numEdges++;  
+        if (G[u].insert(v).second) {  // Add edge u -> v if it's new
+            numEdges++;  // Count each undirected edge once
         }
-        G[v].insert(u);  
+        G[v].insert(u);  // Add edge v -> u (undirected)
     }
+
+    // Set the number of nodes
     numNodes = G.size();
 
     return G;
 }
 
-// para seleccionar el pivote con el mayor número de vecinos en cand ∪ fini
+// Función para seleccionar el pivote con el mayor número de vecinos en `cand ∪ fini`
 int Pivot(const Graph &G, const Set &cand, const Set &fini) {
     int pivot = -1;
     int maxDegree = -1;
@@ -47,26 +51,30 @@ int Pivot(const Graph &G, const Set &cand, const Set &fini) {
     return pivot;
 }
 
-
+// Algoritmo TTT secuencial
 void TTT(const Graph &G, Set K, Set cand, Set fini, vector<Set> &maximalCliques) {
     if (cand.empty() && fini.empty()) {
-        maximalCliques.push_back(K);  // agrega k a la lista de cliques maximales
+        maximalCliques.push_back(K);  // Agregar K a la lista de cliques maximales
         return;
     }
-    int pivot = Pivot(G, cand, fini);    // seleccion del pivote
-    Set ext;    // creacion del conjunto ext 
+
+    // Selección del pivote
+    int pivot = Pivot(G, cand, fini);
+
+    // Creación del conjunto `ext` como `cand - ΓG(pivot)`
+    Set ext;
     for (int v : cand) {
         if (G.at(pivot).find(v) == G.at(pivot).end()) {
             ext.insert(v);
         }
     }
 
-    // procesamos cada vértice ext
+    // Procesar cada vértice `q` en `ext`
     for (int q : ext) {
         Set Kq = K;
         Kq.insert(q);
 
-        // construir candq y finiq
+        // Construir `candq` y `finiq`
         Set candq, finiq;
         for (int neighbor : G.at(q)) {
             if (cand.find(neighbor) != cand.end()) {
@@ -76,22 +84,29 @@ void TTT(const Graph &G, Set K, Set cand, Set fini, vector<Set> &maximalCliques)
                 finiq.insert(neighbor);
             }
         }
-        // actualizar cand y fini para eliminar q
+
+        // Actualizar `cand` y `fini` para eliminar `q`
         cand.erase(q);
         fini.insert(q);
+
+        // Llamada recursiva
         TTT(G, Kq, candq, finiq, maximalCliques);
     }
 }
 
 
+// Función principal
 int main() {
     int numNodes = 0, numEdges = 0;
     string dataset = "/home/chega/cliquesparalela/dataset/CA-AstroPh.txt";
     Graph G = loadGraph(dataset, numNodes, numEdges);
-    cout << "Dataset: " << dataset << endl;
+    //Graph G = loadGraph("com-dblp.ungraph.txt", numNodes, numEdges);
+    //Graph G = loadGraph("dataset_test.txt", numNodes, numEdges);
+    std::cout << "Dataset: " << dataset << std::endl;
 
-    cout << "Number of nodes: " << numNodes << endl;
-    cout << "Number of edges: " << numEdges << endl;
+    // Salida del número de nodos y aristas
+    std::cout << "Number of nodes: " << numNodes << std::endl;
+    std::cout << "Number of edges: " << numEdges << std::endl;
 
     Set K, cand, fini;
     for (const auto &[node, _] : G) {
@@ -99,12 +114,14 @@ int main() {
     }
 
     vector<Set> maximalCliques;
+
+    // Ejecutar TTT secuencial
     clock_t start = clock();
     TTT(G, K, cand, fini, maximalCliques);
     clock_t end = clock();
     double elapsedTime = double(end - start) / CLOCKS_PER_SEC;
-    cout << "Time taken: " << elapsedTime << " seconds" << endl;
-    cout << "Total maximal cliques found: " << maximalCliques.size() << endl;
+    std::cout << "Time taken: " << elapsedTime << " seconds" << std::endl;
+    std::cout << "Total maximal cliques found: " << maximalCliques.size() << std::endl;
 
     /*
     cout << "Maximal cliques:" << endl;
