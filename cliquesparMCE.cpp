@@ -10,13 +10,11 @@
 #include <tbb/parallel_for_each.h>
 #include <dirent.h>
 
-
-// Type definitions for ease
 using Graph = std::unordered_map<int, std::unordered_set<int>>;
 using Set = std::unordered_set<int>;
 using namespace std;
 
-// Hash function for unordered_set of integers
+// hash function para los ints en set
 struct SetHash {
     size_t operator()(const Set &s) const {
         size_t hash = 0;
@@ -27,7 +25,6 @@ struct SetHash {
     }
 };
 
-// Function to load graph from .txt file
 Graph loadGraph(const std::string &filename, int &numNodes, int &numEdges) {
     Graph G;
     std::ifstream infile(filename);
@@ -44,39 +41,39 @@ Graph loadGraph(const std::string &filename, int &numNodes, int &numEdges) {
     return G;
 }
 
-// Función para seleccionar el pivote con el mayor número de vecinos en `cand`
+// para seleccionar el pivote con el mayor número de vecinos en cand
 int ParPivot(const Graph &G, const Set &cand, const Set &fini) {
-    // Unir cand y fini
+    // unir cand y fini
     Set candFini = cand;
     candFini.insert(fini.begin(), fini.end());
 
-    // Vector concurrente para almacenar los pares (vértice, tamaño de intersección)
+    // vector concurrente para almacenar los pares (vertice, tamaño de interseccion)
     tbb::concurrent_vector<std::pair<int, int>> intersectionSizes;
 
-    // Calculamos en paralelo el tamaño de la intersección para cada vértice
+    // calculamos en paralelo el tamaño de la interseccion para cada vertice
     tbb::parallel_for_each(candFini.begin(), candFini.end(), [&](int w) {
         int tw = 0;
-        // Calcular la intersección entre `cand` y los vecinos de `w`
+        // calcular la intersección entre cand y los vecinos de w
         for (int neighbor : G.at(w)) {
             if (cand.find(neighbor) != cand.end()) {
                 tw++;
             }
         }
-        // Guardar el vértice y el tamaño de la intersección
+        // guardar el vertice y el tamaño de la interseccion
         intersectionSizes.push_back({w, tw});
     });
 
-    // Encontrar el vértice con el máximo tamaño de intersección
+    // busca el vertice con el maximo tamaño de interseccion
     auto maxElement = std::max_element(intersectionSizes.begin(), intersectionSizes.end(),
         [](const std::pair<int, int> &a, const std::pair<int, int> &b) {
             return a.second < b.second;
         });
 
-    // Retornar el vértice con la máxima intersección
+    // retorna el vertice con el maximo tamaño de interseccion
     return maxElement->first;
 }
 
-// Función optimizada ParTTT para contar solo cliques maximales sin duplicados
+
 void ParTTT(const Graph &G, Set K, Set cand, Set fini, tbb::concurrent_unordered_set<Set, SetHash> &maximalCliques) {
     if (cand.empty() && fini.empty()) {
         std::vector<int> sortedK(K.begin(), K.end());
@@ -131,7 +128,7 @@ int countTriangles(const Graph &G, int v) {
     return count / 2;
 }
 
-// Función para calcular la degeneración
+// calcular la degeneración
 std::unordered_map<int, int> calculateDegeneracies(const Graph &G) {
     std::unordered_map<int, int> degeneracies;
     for (const auto &entry : G) {
@@ -141,7 +138,7 @@ std::unordered_map<int, int> calculateDegeneracies(const Graph &G) {
     return degeneracies;
 }
 
-// Función para computar el ranking
+// ranking
 std::unordered_map<int, std::pair<int, int>> computeRank(const Graph &G, const std::string &method) {
     std::unordered_map<int, std::pair<int, int>> ranks;
 
@@ -173,7 +170,7 @@ void ParMCE(const Graph &G, std::unordered_map<int, std::pair<int, int>> &ranks,
     tbb::parallel_for_each(G.begin(), G.end(), [&](const std::pair<int, std::unordered_set<int>> &entry) {
         int v = entry.first;
 
-        // Crear el subgrafo inducido por v y su vecindad
+        // subgrafo inducido por v y su vecindad
         Set GvNeighbors = G.at(v);
         GvNeighbors.insert(v);
 
@@ -188,7 +185,6 @@ void ParMCE(const Graph &G, std::unordered_map<int, std::pair<int, int>> &ranks,
             }
         }
 
-        // Llamada a ParTTT para enumerar los cliques maximales
         ParTTT(G, K, cand, fini, maximalCliques);
     });
 }
@@ -199,7 +195,6 @@ int main() {
     std::vector<int> thread_counts = {2, 4, 8, 16};
     std::vector<std::string> methods = {"degeneracy", "degree", "triangle"};
     
-    // Abrir el directorio usando dirent.h
     DIR *dir = opendir(dataset_folder.c_str());
     if (dir == nullptr) {
         std::cerr << "Error opening directory" << std::endl;
@@ -208,10 +203,7 @@ int main() {
 
     struct dirent *entry;
     while ((entry = readdir(dir)) != nullptr) {
-        // Ignorar directorios "." y ".."
         if (entry->d_type == DT_DIR) continue;
-
-        // Crear la ruta completa al archivo
         std::string dataset = dataset_folder + "/" + entry->d_name;
         std::cout << "Processing dataset: " << dataset << std::endl;
 
@@ -238,6 +230,6 @@ int main() {
         }
     }
 
-    closedir(dir);  // Cerrar el directorio después de recorrerlo
+    closedir(dir);
     return 0;
 }
