@@ -6,10 +6,9 @@
 #include <algorithm>
 #include <tbb/tbb.h>
 #include <tbb/concurrent_vector.h>
-#include <tbb/concurrent_unordered_set.h>
 #include <tbb/blocked_range.h>
+#include <tbb/concurrent_unordered_set.h>
 #include <tbb/parallel_for_each.h>
-#include <atomic>
 #include <dirent.h>
 
 using Graph = std::unordered_map<int, std::unordered_set<int>>;
@@ -118,54 +117,55 @@ void ParTTT(const Graph &G, Set K, Set cand, Set fini, tbb::concurrent_unordered
         }
     });
 }
-
 int countTriangles(const Graph &G, int v) {
     int count = 0;
-    for (int u : G.at(v)) {
-        for (int w : G.at(u)) {
-            if (G.at(v).find(w) != G.at(v).end()) {
-                count++;
+    
+    // Usamos un vector para almacenar los conteos locales por hilo
+    std::vector<int> local_counts(G.at(v).size(), 0);
+
+    // Paralelización del conteo de triángulos
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, G.at(v).size()), [&](const tbb::blocked_range<size_t>& range) {
+        for (size_t i = range.begin(); i < range.end(); ++i) {
+            int u = *std::next(G.at(v).begin(), i); // Obtener el nodo correspondiente
+            int local_count = 0;
+            for (int w : G.at(u)) {
+                if (G.at(v).find(w) != G.at(v).end()) {
+                    local_count++;
+                }
             }
+            local_counts[i] = local_count; // Almacenar el conteo local
         }
+    });
+
+    // Ahora sumamos los resultados locales para obtener el conteo total
+    for (int local_count : local_counts) {
+        count += local_count;
     }
-    return count / 2;
+
+    return count / 2; // Dividimos entre 2 para no contar los triángulos dos veces
 }
+
 
 
 
 // calcular la degeneración
 std::unordered_map<int, int> calculateDegeneracies(const Graph &G) {
     std::unordered_map<int, int> degeneracies;
-    for (const auto &entry : G) {
+
+    // Usar tbb::concurrent_unordered_map para ser seguro en paralelo
+    tbb::concurrent_unordered_map<int, int> concurrent_degeneracies;
+
+    tbb::parallel_for_each(G.begin(), G.end(), [&](const std::pair<int, std::unordered_set<int>> &entry) {
         int v = entry.first;
-        degeneracies[v] = G.at(v).size();
+        int degree = G.at(v).size();
+        concurrent_degeneracies[v] = degree;
+    });
+
+    // Copiar resultados a un std::unordered_map si se necesita
+    for (const auto &entry : concurrent_degeneracies) {
+        degeneracies[entry.first] = entry.second;
     }
     return degeneracies;
-}
-
-
-std::pair<int, int> computeNodeRank(const Graph &G, int node, const std::string &method) {
-    if (G.find(node) == G.end()) {
-        throw std::invalid_argument("El nodo no existe en el grafo.");
-    }
-
-    if (method == "degree") {
-        // Calcular el grado del nodo
-        int degree = G.at(node).size();
-        return std::make_pair(degree, node);
-
-    } else if (method == "triangle") {
-        // Calcular el número de triángulos en los que participa el nodo
-        int triangle_count = countTriangles(G, node);
-        return std::make_pair(triangle_count, node);
-
-    } else if (method == "degeneracy") {
-        // Calcular la degenerancia del nodo
-        std::unordered_map<int, int> degeneracies = calculateDegeneracies(G);
-        return std::make_pair(degeneracies[node], node);
-    }
-
-    throw std::invalid_argument("Método no reconocido. Usa 'degree', 'triangle' o 'degeneracy'.");
 }
 
 
@@ -179,7 +179,8 @@ std::unordered_map<int, std::pair<int, int>> computeRank(const Graph &G, const s
             int degree = G.at(v).size();
             ranks[v] = std::make_pair(degree, v);
         }
-    } else if (method == "triangle") {
+    }
+    else if (method == "triangle") {
         for (const std::pair<int, std::unordered_set<int>> &entry : G) {
             int v = entry.first;
             int triangle_count = countTriangles(G, v);
@@ -192,16 +193,38 @@ std::unordered_map<int, std::pair<int, int>> computeRank(const Graph &G, const s
             ranks[v] = std::make_pair(degeneracies[v], v);
         }
     }
+    else if (method == "degree_degeneracy") {
+        double degree_weight = 0.7;  // Peso para el grado
+        double degeneracy_weight = 0.3;  // Peso para el índice de degeneración
 
+        std::unordered_map<int, int> degeneracies = calculateDegeneracies(G);  // Calculamos la degeneración de cada nodo
+
+        for (const std::pair<int, std::unordered_set<int>> &entry : G) {
+            int v = entry.first;
+            
+            // Grado del nodo
+            int degree = G.at(v).size();
+            
+            // Índice de degeneración del nodo
+            int degeneracy = degeneracies[v];
+            
+            // Ranking ponderado combinando los dos
+            double rank = degree_weight * degree + degeneracy_weight * degeneracy;
+            
+            // Guardamos el ranking en el mapa
+            ranks[v] = std::make_pair(rank, v);
+        }
+
+    }
     return ranks;
 }
 
-void ParMCE(const Graph &G, const std::string &rankMethod,
+void ParMCE(const Graph &G, std::unordered_map<int, std::pair<int, int>> &ranks,
             tbb::concurrent_unordered_set<Set, SetHash> &maximalCliques) {
     tbb::parallel_for_each(G.begin(), G.end(), [&](const std::pair<int, std::unordered_set<int>> &entry) {
         int v = entry.first;
 
-        // Subgrafo inducido por v y su vecindad
+        // subgrafo inducido por v y su vecindad
         Set GvNeighbors = G.at(v);
         GvNeighbors.insert(v);
 
@@ -209,10 +232,7 @@ void ParMCE(const Graph &G, const std::string &rankMethod,
         Set cand, fini;
 
         for (int w : GvNeighbors) {
-            // Calcular el rank de v y w en el momento
-            auto rankV = computeNodeRank(G, v, rankMethod).first;
-            auto rankW = computeNodeRank(G, w, rankMethod).first;
-            if (rankW >= rankV) {
+            if (ranks[w].first >= ranks[v].first) {
                 cand.insert(w);
             } else {
                 fini.insert(w);
@@ -224,11 +244,10 @@ void ParMCE(const Graph &G, const std::string &rankMethod,
 }
 
 
-
 int main() {
     std::string dataset_folder = "/Users/gabrielrodriguezpostigo/Library/Mobile Documents/com~apple~CloudDocs/Programación/CliquesParMCE-main-2/datasets_prubas";
-    std::vector<int> thread_counts = {8};
-    std::vector<std::string> methods = {"degeneracy", "degree", "triangle"};
+    std::vector<int> thread_counts = {2, 4, 8};
+    std::vector<std::string> methods = {"degeneracy", "degree", "triangle","degree_degeneracy"};
     
     DIR *dir = opendir(dataset_folder.c_str());
     if (dir == nullptr) {
@@ -248,12 +267,15 @@ int main() {
                                                                                 
         for (const auto& method : methods) {
             std::cout << "Method: " << method << std::endl;
+            
+
             for (int num_threads : thread_counts) {
                 tbb::global_control control(tbb::global_control::max_allowed_parallelism, num_threads);
                 tbb::concurrent_unordered_set<Set, SetHash> maximalCliques;
 
                 tbb::tick_count start = tbb::tick_count::now();
-                ParMCE(G, method, maximalCliques);
+                auto ranks = computeRank(G, method);
+                ParMCE(G, ranks, maximalCliques);
                 tbb::tick_count end = tbb::tick_count::now();
                 double elapsedTime = (end - start).seconds();
 
