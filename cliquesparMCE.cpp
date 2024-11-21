@@ -168,33 +168,7 @@ std::pair<int, int> computeNodeRank(const Graph &G, int node, const std::string 
     throw std::invalid_argument("Método no reconocido. Usa 'degree', 'triangle' o 'degeneracy'.");
 }
 
-
-// ranking
-std::unordered_map<int, std::pair<int, int>> computeRank(const Graph &G, const std::string &method) {
-    std::unordered_map<int, std::pair<int, int>> ranks;
-
-    if (method == "degree") {
-        for (const std::pair<int, std::unordered_set<int>> &entry : G) {
-            int v = entry.first;
-            int degree = G.at(v).size();
-            ranks[v] = std::make_pair(degree, v);
-        }
-    } else if (method == "triangle") {
-        for (const std::pair<int, std::unordered_set<int>> &entry : G) {
-            int v = entry.first;
-            int triangle_count = countTriangles(G, v);
-            ranks[v] = std::make_pair(triangle_count, v);
-        }
-    } else if (method == "degeneracy") {
-        std::unordered_map<int, int> degeneracies = calculateDegeneracies(G);
-        for (const std::pair<int, std::unordered_set<int>> &entry : G) {
-            int v = entry.first;
-            ranks[v] = std::make_pair(degeneracies[v], v);
-        }
-    }
-
-    return ranks;
-}
+//
 
 void ParMCE(const Graph &G, const std::string &rankMethod,
             tbb::concurrent_unordered_set<Set, SetHash> &maximalCliques) {
